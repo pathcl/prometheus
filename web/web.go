@@ -337,7 +337,7 @@ func New(logger log.Logger, o *Options) *Handler {
 	readyf := h.testReady
 
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, path.Join(o.ExternalURL.Path, "/graph"), http.StatusFound)
+		http.Redirect(w, r, path.Join(o.ExternalURL.Path, "/classic/graph"), http.StatusFound)
 	})
 	router.Get("/classic/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, path.Join(o.ExternalURL.Path, "/classic/graph"), http.StatusFound)
