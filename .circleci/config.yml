@@ -2,7 +2,7 @@
 version: 2.1
 
 orbs:
-  prometheus: prometheus/prometheus@0.4.0
+  prometheus: prometheus/prometheus@0.11.0
   go: circleci/go@0.2.0
   win: circleci/windows@2.3.0
 
@@ -10,6 +10,9 @@ executors:
   # Whenever the Go version is updated here, .promu.yml
   # should also be updated.
   golang:
+    docker:
+    - image: circleci/golang:1.16-node
+  golang_115:
     docker:
     - image: circleci/golang:1.15-node
 
@@ -36,8 +39,9 @@ jobs:
           # likely to get OOMed and killed.
           GOOPTS: "-p 2"
           GOMAXPROCS: "2"
+          GO111MODULE: "on"
     - prometheus/check_proto:
-        version: "3.12.3"
+        version: "3.15.8"
     - prometheus/store_artifact:
         file: prometheus
     - prometheus/store_artifact:
@@ -67,19 +71,25 @@ jobs:
           refreshenv
     - run:
         command: |
-          $env:GOARCH=""; $env:GOOS=""; cd web/ui; go generate -mod=vendor
+          $env:GOARCH=""; $env:GOOS=""; cd web/ui; go generate
           cd ../..
           $TestTargets = go list ./... | Where-Object { $_ -NotMatch "(github.com/prometheus/prometheus/discovery.*|github.com/prometheus/prometheus/config|github.com/prometheus/prometheus/web)"}
-          go test $TestTargets -mod=vendor -vet=off -v
+          go test $TestTargets -vet=off -v
         environment:
           GOGC: "20"
-          GOOPTS: "-p 2 -mod=vendor"
+          GOOPTS: "-p 2"
+
+  test_tsdb_go115:
+    executor: golang_115
+    steps:
+    - checkout
+    - run: go test ./tsdb/...
 
   test_mixins:
     executor: golang
     steps:
     - checkout
-    - run: go install -mod=vendor ./cmd/promtool/.
+    - run: go install ./cmd/promtool/.
     - run:
         command: go install -mod=readonly github.com/google/go-jsonnet/cmd/jsonnet github.com/google/go-jsonnet/cmd/jsonnetfmt github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb
         working_directory: ~/project/documentation/prometheus-mixin
@@ -100,6 +110,8 @@ jobs:
     executor: golang
     steps:
     - checkout
+    - run: mkdir -v -p "${PATH%%:*}" && curl -sL --fail https://github.com/mikefarah/yq/releases/download/v4.6.3/yq_linux_amd64 -o "${PATH%%:*}/yq" && chmod -v +x "${PATH%%:*}/yq"
+    - run: sha256sum -c <(echo "c4343783c3361495c0d6d1eb742bba7432aa65e13e9fb8d7e201d544bcf14246 ${PATH%%:*}/yq")
     - run: ./scripts/sync_repo_files.sh
 
 workflows:
@@ -107,6 +119,10 @@ workflows:
   prometheus:
     jobs:
     - test:
+        filters:
+          tags:
+            only: /.*/
+    - test_tsdb_go115:
         filters:
           tags:
             only: /.*/
@@ -120,17 +136,18 @@ workflows:
             only: /.*/
     - prometheus/build:
         name: build
+        parallelism: 12
         filters:
           tags:
-            only: /.*/
-    - prometheus/publish_master:
+            only: /^v[0-9]+(\.[0-9]+){2}(-.+|[^-.]*)$/
+    - prometheus/publish_main:
         context: org-context
         requires:
         - test
         - build
         filters:
           branches:
-            only: master
+            only: main
         image: circleci/golang:1-node
     - prometheus/publish_release:
         context: org-context
@@ -150,7 +167,7 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - main
     jobs:
     - repo_sync:
         context: org-context

@@ -323,7 +323,7 @@ func TestBlockSize(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expAfterDelete, actAfterDelete, "after a delete reported block size doesn't match actual disk size")
 
-		c, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{0}, nil)
+		c, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{0}, nil, nil)
 		require.NoError(t, err)
 		blockDirAfterCompact, err := c.Compact(tmpdir, []string{blockInit.Dir()}, nil)
 		require.NoError(t, err)
@@ -426,7 +426,7 @@ func createBlock(tb testing.TB, dir string, series []storage.Series) string {
 }
 
 func createBlockFromHead(tb testing.TB, dir string, head *Head) string {
-	compactor, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{1000000}, nil)
+	compactor, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{1000000}, nil, nil)
 	require.NoError(tb, err)
 
 	require.NoError(tb, os.MkdirAll(dir, 0777))
@@ -448,15 +448,10 @@ func createHead(tb testing.TB, w *wal.WAL, series []storage.Series, chunkDir str
 	for _, s := range series {
 		ref := uint64(0)
 		it := s.Iterator()
+		lset := s.Labels()
 		for it.Next() {
 			t, v := it.At()
-			if ref != 0 {
-				err := app.AddFast(ref, t, v)
-				if err == nil {
-					continue
-				}
-			}
-			ref, err = app.Add(s.Labels(), t, v)
+			ref, err = app.Append(ref, lset, t, v)
 			require.NoError(tb, err)
 		}
 		require.NoError(tb, it.Err())

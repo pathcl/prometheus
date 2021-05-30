@@ -158,7 +158,7 @@ func TestNoPanicFor0Tombstones(t *testing.T) {
 		},
 	}
 
-	c, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{50}, nil)
+	c, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{50}, nil, nil)
 	require.NoError(t, err)
 
 	c.plan(metas)
@@ -172,7 +172,7 @@ func TestLeveledCompactor_plan(t *testing.T) {
 		180,
 		540,
 		1620,
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	cases := map[string]struct {
@@ -381,7 +381,7 @@ func TestRangeWithFailedCompactionWontGetSelected(t *testing.T) {
 		240,
 		720,
 		2160,
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	cases := []struct {
@@ -431,7 +431,7 @@ func TestCompactionFailWillCleanUpTempDir(t *testing.T) {
 		240,
 		720,
 		2160,
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	tmpdir, err := ioutil.TempDir("", "test")
@@ -940,7 +940,7 @@ func TestCompaction_populateBlock(t *testing.T) {
 				blocks = append(blocks, &mockBReader{ir: ir, cr: cr, mint: mint, maxt: maxt})
 			}
 
-			c, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{0}, nil)
+			c, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{0}, nil, nil)
 			require.NoError(t, err)
 
 			meta := &BlockMeta{
@@ -1065,7 +1065,7 @@ func BenchmarkCompaction(b *testing.B) {
 				blockDirs = append(blockDirs, block.Dir())
 			}
 
-			c, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{0}, nil)
+			c, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{0}, nil, nil)
 			require.NoError(b, err)
 
 			b.ResetTimer()
@@ -1101,7 +1101,7 @@ func BenchmarkCompactionFromHead(b *testing.B) {
 			for ln := 0; ln < labelNames; ln++ {
 				app := h.Appender(context.Background())
 				for lv := 0; lv < labelValues; lv++ {
-					app.Add(labels.FromStrings(fmt.Sprintf("%d", ln), fmt.Sprintf("%d%s%d", lv, postingsBenchSuffix, ln)), 0, 0)
+					app.Append(0, labels.FromStrings(fmt.Sprintf("%d", ln), fmt.Sprintf("%d%s%d", lv, postingsBenchSuffix, ln)), 0, 0)
 				}
 				require.NoError(b, app.Commit())
 			}
@@ -1134,9 +1134,9 @@ func TestDisableAutoCompactions(t *testing.T) {
 	db.DisableCompactions()
 	app := db.Appender(context.Background())
 	for i := int64(0); i < 3; i++ {
-		_, err := app.Add(label, i*blockRange, 0)
+		_, err := app.Append(0, label, i*blockRange, 0)
 		require.NoError(t, err)
-		_, err = app.Add(label, i*blockRange+1000, 0)
+		_, err = app.Append(0, label, i*blockRange+1000, 0)
 		require.NoError(t, err)
 	}
 	require.NoError(t, app.Commit())
@@ -1249,11 +1249,11 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 
 			// Add some data to the head that is enough to trigger a compaction.
 			app := db.Appender(context.Background())
-			_, err := app.Add(defaultLabel, 1, 0)
+			_, err := app.Append(0, defaultLabel, 1, 0)
 			require.NoError(t, err)
-			_, err = app.Add(defaultLabel, 2, 0)
+			_, err = app.Append(0, defaultLabel, 2, 0)
 			require.NoError(t, err)
-			_, err = app.Add(defaultLabel, 3+rangeToTriggerCompaction, 0)
+			_, err = app.Append(0, defaultLabel, 3+rangeToTriggerCompaction, 0)
 			require.NoError(t, err)
 			require.NoError(t, app.Commit())
 
